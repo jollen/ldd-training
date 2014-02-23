@@ -133,7 +133,6 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 	int i;
 	int idx;
 	wait_queue_head_t *wq;
-	//wait_queue_t wait;	
 	DECLARE_WAITQUEUE(wait, current);
 	struct timer_list *timer;
 	unsigned char temp[4];
@@ -145,13 +144,11 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 
 	up(&cdata->sem);
 
-	//printk(KERN_INFO "Simon2: cdata_write: idx is %d.\n", idx);
 	for(i = 0; i < size; i++)
 	{
 		if(kfifo_len(cdata->cdata_fifo) >= BUF_SIZE)
 		{
 			printk(KERN_ALERT "cdata_write: buffer is full\n");
-			//interruptible_sleep_on_timeout(&cdata->wq, jiffies + 10);
 
 			timer->expires = jiffies + 5*HZ;
 			timer->function = flush_buffer;
@@ -164,10 +161,6 @@ repeat:
 			set_current_state(TASK_INTERRUPTIBLE);
 			spin_unlock(&cdata->lock);
 
-			//down_interruptible(&cdata->sem);
-			//idx = cdata->idx;
-			//up(&cdata->sem);
-			
 			printk("kfifo length = %d\n", kfifo_len(cdata->cdata_fifo));
 			if (kfifo_len(cdata->cdata_fifo) >= BUF_SIZE) {
 				//spin_unlock_irq(&mse->lock);
@@ -194,27 +187,15 @@ static int cdata_ioctl(struct inode *inode, struct file *filp,
                 unsigned int cmd, unsigned long arg)
 {
         struct cdata_t *cdata = (struct cdata_t *)filp->private_data;
-        //int n;
-        //unsigned long *fb;
         int i;
 
         switch (cmd) {
             case IOCTL_SYNC:
                 printk(KERN_ALERT "IOCTL_SYNC.\n");
-
-	/*	for(i = 0; i < BUF_SIZE; i++)
-		{
-			copy_to_user(&cdata->buf[i], &buf[i], 1);
-			idx++;
-		}*/
                 return 0;
 
             case IOCTL_EMPTY:
                 printk(KERN_ALERT "IOCTL_EMPTY.\n");
-	/*	for(i=0; i<BUF_SIZE; i++)
-		{
-			cdata->buf[i] = *((char *)(arg));
-		}*/
                 return 0;
  
         }
