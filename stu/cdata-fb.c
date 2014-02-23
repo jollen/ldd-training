@@ -132,14 +132,12 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
         struct cdata_t *cdata = (struct cdata_t *)filp->private_data;
 	int i;
 	int idx;
-	wait_queue_head_t *wq;
 	DECLARE_WAITQUEUE(wait, current);
 	struct timer_list *timer;
 	unsigned char temp[4];
 
 	down_interruptible(&cdata->sem);
 
-	wq = &cdata->wq;
 	timer = &cdata->flush_timer;
 
 	up(&cdata->sem);
@@ -156,14 +154,14 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 			add_timer(timer);
 
 			spin_lock(&cdata->lock);
-			add_wait_queue(wq, &wait);
+			add_wait_queue(&cdata->wq, &wait);
 repeat:
 			set_current_state(TASK_INTERRUPTIBLE);
 
 			printk("kfifo length = %d\n", kfifo_len(cdata->cdata_fifo));
 
 			if (kfifo_len(cdata->cdata_fifo) >= BUF_SIZE) {
-				spin_unlock_irq(&mse->lock);
+				spin_unlock_irq(&cdata->lock);
 				schedule();
 				spin_lock(&cdata->lock);
 				goto repeat;
