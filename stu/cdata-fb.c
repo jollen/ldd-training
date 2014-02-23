@@ -19,7 +19,7 @@
 
 #define BUF_SIZE 64
 #define CDATA_FB_MINOR 58
-#define LCD_SIZE        (320*240*4)
+#define LCD_SIZE        (640*480*1)
 
 unsigned char *fbmem;
 
@@ -220,11 +220,13 @@ static int cdata_mmap(struct file *filp,
 	unsigned long size;
 
 	from = vma->vm_start;
-	to = 0x33f00000;
+	to = 0xe0000000;
 	size = vma->vm_end-vma->vm_start;
 	
 	while(size){
-		//remap_page_range(from, to, PAGE_SIZE, PAGE_SHARED);
+	        remap_pfn_range(vma, from, 
+                     0x33f00000, 
+                     PAGE_SIZE, vma->vm_page_prot);
 		
 		from += PAGE_SIZE;
 		to += PAGE_SIZE;
