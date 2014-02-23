@@ -81,19 +81,17 @@ static int cdata_open(struct inode *inode, struct file *filp)
 	struct cdata_t *cdata;
 
 	printk(KERN_ALERT "CDATA: in open\n");
+
 	cdata= kmalloc(sizeof(struct cdata_t), GFP_KERNEL);
-        cdata->buf = kmalloc(BUF_SIZE, GFP_KERNEL);
 
 	spin_lock_init(&cdata->fifo_lock);
+
 	cdata->cdata_fifo = kfifo_alloc(BUF_SIZE, GFP_KERNEL,
 					 &cdata->fifo_lock);
 	if (IS_ERR(cdata->cdata_fifo)) {
 		printk(KERN_ERR "cdata-fb: kfifo_alloc failed\n");
 		return PTR_ERR(cdata->cdata_fifo);
 	}
-	cdata->idx = 0;
-
-	filp->private_data = (void *)cdata;
 
 	init_waitqueue_head(&cdata->wq);
 
@@ -103,7 +101,11 @@ static int cdata_open(struct inode *inode, struct file *filp)
 
 	INIT_WORK(&cdata->work, flush_buffer);
 
+	filp->private_data = (void *)cdata;
+
 	offset = 0;
+
+	fbmem = (unsigned char *)ioremap(0xe0000000, LCD_SIZE);
 
 	return 0;
 }
