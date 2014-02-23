@@ -159,14 +159,13 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 			add_wait_queue(wq, &wait);
 repeat:
 			set_current_state(TASK_INTERRUPTIBLE);
-			spin_unlock(&cdata->lock);
 
 			printk("kfifo length = %d\n", kfifo_len(cdata->cdata_fifo));
+
 			if (kfifo_len(cdata->cdata_fifo) >= BUF_SIZE) {
-				//spin_unlock_irq(&mse->lock);
+				spin_unlock_irq(&mse->lock);
 				schedule();
 				spin_lock(&cdata->lock);
-				//spin_lock_irq(&mse->lock);
 				goto repeat;
 			}
 
