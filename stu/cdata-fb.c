@@ -35,7 +35,6 @@ struct cdata_t {
     struct work_struct      work;
     struct kfifo *cdata_fifo;
     spinlock_t fifo_lock;
-
 };
 
 /*
@@ -132,10 +131,7 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 		{
 			printk(KERN_ALERT "cdata_write: buffer is full\n");
 
-			timer->expires = jiffies + 5*HZ;
-			timer->function = flush_buffer;
-			timer->data =(unsigned long *)&cdata->work; 
-			add_timer(timer);
+			schedule_work(&cdata->work);
 
 			spin_lock(&cdata->lock);
 			add_wait_queue(&cdata->wq, &wait);
