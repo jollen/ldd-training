@@ -25,11 +25,8 @@ unsigned char *fbmem;
 unsigned int offset;
 
 struct cdata_t {
-    unsigned char *buf;
-    int	idx;
     wait_queue_head_t   wq;
     struct semaphore    sem;
-    struct timer_list   flush_timer;
     spinlock_t		lock;
 
     struct work_struct      work;
@@ -46,7 +43,7 @@ static void flush_buffer(struct work_struct *work)
 	int i, j;
 	wait_queue_head_t       *wq;
 	int len;
-	char pixel[BUF_SIZE];
+	unsigned char pixel[BUF_SIZE];
 
 	down_interruptible(&cdata->sem);
 	wq = &cdata->wq;
@@ -81,9 +78,9 @@ static int cdata_open(struct inode *inode, struct file *filp)
 
 	printk(KERN_ALERT "CDATA: in open\n");
 
-	cdata= kmalloc(sizeof(struct cdata_t), GFP_KERNEL);
+	cdata= (struct cdata_t *)kmalloc(sizeof(struct cdata_t), GFP_KERNEL);
 
-	spin_lock_init(&cdata->fifo_lock);
+	spin_lock_init(&cdata->lock);
 
 	cdata->cdata_fifo = kfifo_alloc(BUF_SIZE, GFP_KERNEL,
 					 &cdata->fifo_lock);
@@ -93,10 +90,6 @@ static int cdata_open(struct inode *inode, struct file *filp)
 	}
 
 	init_waitqueue_head(&cdata->wq);
-
-	sema_init(&cdata->sem, 1);
-
-	init_timer(&cdata->flush_timer);
 
 	INIT_WORK(&cdata->work, flush_buffer);
 
@@ -114,20 +107,12 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 {
         struct cdata_t *cdata = (struct cdata_t *)filp->private_data;
 	int i;
-	int idx;
 	DECLARE_WAITQUEUE(wait, current);
-	struct timer_list *timer;
 	unsigned char temp[4];
 
-	down_interruptible(&cdata->sem);
-
-	timer = &cdata->flush_timer;
-
-	up(&cdata->sem);
-
-	for(i = 0; i < size; i++)
+	for (i = 0; i < size; i++)
 	{
-		if(kfifo_len(cdata->cdata_fifo) >= BUF_SIZE)
+		if (kfifo_len(cdata->cdata_fifo) >= BUF_SIZE)
 		{
 			printk(KERN_ALERT "cdata_write: buffer is full\n");
 
@@ -141,17 +126,18 @@ repeat:
 			printk("kfifo length = %d\n", kfifo_len(cdata->cdata_fifo));
 
 			if (kfifo_len(cdata->cdata_fifo) >= BUF_SIZE) {
-				spin_unlock_irq(&cdata->lock);
+				spin_unlock(&cdata->lock);
 				schedule();
 				spin_lock(&cdata->lock);
 				goto repeat;
 			}
+			spin_unlock(&cdata->lock);
 
-			current->state = TASK_RUNNING;
 			remove_wait_queue(&cdata->wq, &wait);
 		} else {
 			copy_from_user(&temp[0], &buf[i], 1);
-			if(!kfifo_put(cdata->cdata_fifo, &temp[0], 1)) {
+
+			if (!kfifo_put(cdata->cdata_fifo, &temp[0], 1)) {
 				printk("Simon: kfifo_put ERROR\n");
 			}
 		}
@@ -184,10 +170,7 @@ static int cdata_close(struct inode *inode, struct file *filp)
 {
         struct cdata_t *cdata = (struct cdata_t *)filp->private_data;
 
-        kfree(cdata->buf);
         kfree(cdata);
-
-	del_timer(&cdata->flush_timer);
 
         return 0;
 }
@@ -205,7 +188,7 @@ static int cdata_mmap(struct file *filp,
 	
 	while(size){
 	        remap_pfn_range(vma, from, 
-                     0x33f00000, 
+                     to, 
                      PAGE_SIZE, vma->vm_page_prot);
 		
 		from += PAGE_SIZE;
