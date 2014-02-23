@@ -12,7 +12,6 @@
 #include <linux/irq.h>
 #include <linux/miscdevice.h>
 #include <linux/input.h>
-//#include <linux/tqueue.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
 #include <linux/kfifo.h>
@@ -30,7 +29,6 @@ struct cdata_t {
     wait_queue_head_t   wq;
     struct semaphore    sem;
     struct timer_list   flush_timer;
-    //struct tq_struct	tq;
     spinlock_t		lock;
 
     struct work_struct      work;
@@ -45,7 +43,6 @@ static void flush_buffer(struct work_struct *work)
 	int i, j;
 	wait_queue_head_t       *wq;
 	int index;
-	//unsigned char pixel[BUF_SIZE];
 	unsigned char *pixel;
 	int len;
 
@@ -54,7 +51,6 @@ static void flush_buffer(struct work_struct *work)
 	down_interruptible(&cdata->sem);
 	wq = &cdata->wq;
 	index = cdata->idx;
-	//pixel = cdata->buf;
 
 	len = kfifo_len(cdata->cdata_fifo);
 	printk("Prepare to flush, kfifo length = %d\n", len);
@@ -97,7 +93,6 @@ static void flush_buffer(struct work_struct *work)
 	cdata->offset = offset;
 #endif
 
-
 	wake_up(wq);
 }
 
@@ -126,7 +121,6 @@ static int cdata_open(struct inode *inode, struct file *filp)
 
 	init_timer(&cdata->flush_timer);
 
-	//INIT_TQUEUE(&cdata->tq, flush_buffer, (void *)cdata);
 	INIT_WORK(&cdata->work, flush_buffer);
 
 	return 0;
@@ -137,7 +131,6 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 {
         struct cdata_t *cdata = (struct cdata_t *)filp->private_data;
 	int i;
-	//int idx = cdata->idx;
 	int idx;
 	wait_queue_head_t *wq;
 	//wait_queue_t wait;	
@@ -147,7 +140,6 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 
 	down_interruptible(&cdata->sem);
 
-	//idx = cdata->idx;
 	wq = &cdata->wq;
 	timer = &cdata->flush_timer;
 
@@ -156,8 +148,6 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 	//printk(KERN_INFO "Simon2: cdata_write: idx is %d.\n", idx);
 	for(i = 0; i < size; i++)
 	{
-		//if(idx > BUF_SIZE)
-		//if(!kfifo_len(cdata->cdata_fifo))
 		if(kfifo_len(cdata->cdata_fifo) >= BUF_SIZE)
 		{
 			printk(KERN_ALERT "cdata_write: buffer is full\n");
@@ -167,8 +157,6 @@ static ssize_t cdata_write(struct file *filp, const char *buf, size_t size,
 			timer->function = flush_buffer;
 			timer->data =(unsigned long *)&cdata->work; 
 			add_timer(timer);
-
-			//schedule_task(&cdata->tq);
 
 			spin_lock(&cdata->lock);
 			add_wait_queue(wq, &wait);
@@ -191,13 +179,6 @@ repeat:
 
 			current->state = TASK_RUNNING;
 			remove_wait_queue(&cdata->wq, &wait);
-
-			//flush_buffer(&cdata->buf[0]);
-			
-			//while(1){
-			//	current->state = TASK_INTERRUPTIBLE;
-			//	schedule();
-			//}
 		} else {
 			copy_from_user(&temp[0], &buf[i], 1);
 			if(!kfifo_put(cdata->cdata_fifo, &temp[0], 1)) {
@@ -317,41 +298,15 @@ static ssize_t cdata_handle_connect(struct class *cls, const char *buf,
 	    return 0;
 
 	printk(KERN_ALERT "cdata_dev: connect_enable = %d\n", v);
-#if 0
-	/** callback connect */
-	for (i = 0; i < MAX_MINOR; i++) {
-	    data = cdata_dev_data[i];
-
-	    if (data == NULL)
-		continue;
-
-	    ops = data->ops;
-	    if (v == 0) {
-	        if (ops && ops->disconnect) 
-		    ops->disconnect(ops);
-	    } else {
-	        if (ops && ops->connect) 
-		    ops->connect(ops);
-	    }
-	}
-#endif
 	return 0;
 }
 
 static CLASS_ATTR(cdata, 0666, cdata_show_version, cdata_handle_connect);
 static struct class *cdata_class;
-
 #endif
 
 int cdata_init_module(void)
 {
-	//int i;
-	//unsigned char *fbmem;
-
-        //if (register_chrdev(123, "cdata", &cdata_fops) < 0) {
-        //    printk(KERN_INFO "CDATA: can't register driver\n");
-        //    return -1;
-        //}
 	if (misc_register(&cdata_fb_misc) < 0) {
 		printk(KERN_INFO "CDATA_FB: can't register driver\n");
         	return -1;
@@ -362,26 +317,11 @@ int cdata_init_module(void)
 	cdata_class = class_create(THIS_MODULE, "cdata_android");
 	class_create_file(cdata_class, &class_attr_cdata);
 
-	//fbmem = ioremap(0x33f00000, 240*320*4);
-
-/*	for(i=0; i < 5000; i++)
-	{
-		writel(0x000000ff, fbmem);
-		fbmem = fbmem + 4;
-
-		//Simon: ARM9 is little endian SOC
-		//Data is filled form right side byte
-		//writeb(0x00, fbmem++);
-		//writeb(0x00, fbmem++);
-		//writeb(0xff, fbmem++);
-		//writeb(0x00, fbmem++);
-	}*/
 	return 0;
 }
 
 void cdata_cleanup_module(void)
 {
-	//unregister_chrdev(121, "cdata");
 	misc_deregister(&cdata_fb_misc);
 
 	class_remove_file(cdata_class, &class_attr_cdata);
