@@ -22,6 +22,7 @@
 #define LCD_SIZE        (640*480*1)
 
 unsigned char *fbmem;
+unsigned int offset;
 
 struct cdata_t {
     unsigned char *buf;
@@ -37,60 +38,39 @@ struct cdata_t {
 
 };
 
+/*
+ * kfifo buffer is full
+ */
 static void flush_buffer(struct work_struct *work)
 {
 	struct cdata_t *cdata = container_of(work, struct cdata_t, work); 
 	int i, j;
 	wait_queue_head_t       *wq;
-	int index;
-	unsigned char *pixel;
 	int len;
-
-	pixel = kmalloc(BUF_SIZE, GFP_KERNEL);
+	char pixel[BUF_SIZE];
 
 	down_interruptible(&cdata->sem);
 	wq = &cdata->wq;
-	index = cdata->idx;
 
 	len = kfifo_len(cdata->cdata_fifo);
 	printk("Prepare to flush, kfifo length = %d\n", len);
-	if(kfifo_get(cdata->cdata_fifo, pixel, len) != len) {
+	if (kfifo_get(cdata->cdata_fifo, pixel, len) != len) {
 		printk("Simon: kfifo_get ERROR\n");
 	}
 	printk("Finish Flush Buffer!!\n");
 	up(&cdata->sem);
 
-	kfree(pixel);
-#if 0
-	for(i=0; i < BUF_SIZE; i++)
+#if 1
+	for (i = 0; i < BUF_SIZE; i++)
 	{
-		//writel(0x000000ff, fbmem);
-		//fbmem = fbmem + 4;
-
 		//Simon: ARM9 is little endian SOC
 		//Data is filled form right side byte
-		//writeb(*priv++, fbmem++);
-		//writeb(*priv++, fbmem++);
-		//writeb(*priv++, fbmem++);
-		//writeb(*priv++, fbmem++);
 
-		writeb(pixel[i], fbmem);
-		fbmem++;
-		//for (j = 0; j < 10000000; j++);
-		//schedule();	
+		writeb(pixel[i], fbmem + offset);
+		offset++;
+		if (offset >= LCD_SIZE)
+		    offset = 0;
 	}
-/*
-        for (i = 0; i < index; i++) {
-            writeb(pixel[i], fbmem+offset);
-            offset++;
-            if (offset >= LCD_SIZE)
-                offset = 0;
-            // Lab
-            for (j = 0; j < 100000; j++);
-        }
-*/
-	cdata->idx = 0;
-	cdata->offset = offset;
 #endif
 
 	wake_up(wq);
@@ -122,6 +102,8 @@ static int cdata_open(struct inode *inode, struct file *filp)
 	init_timer(&cdata->flush_timer);
 
 	INIT_WORK(&cdata->work, flush_buffer);
+
+	offset = 0;
 
 	return 0;
 }
@@ -265,7 +247,6 @@ static ssize_t cdata_handle_connect(struct class *cls, const char *buf,
 	struct cdata_t *data;
 	char str[1];
 	int v;
-	int i;
 
 	memcpy(str, buf, 1);
 
